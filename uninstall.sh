@@ -4,7 +4,7 @@
 
 set -euo pipefail
 
-OVERLAY_NAME="rp1-300mhz"
+OVERLAY_NAME="rp1-clk-333mhz"
 BOOT_OVERLAYS_DIR="/boot/firmware/overlays"
 CONFIG_TXT="/boot/firmware/config.txt"
 
