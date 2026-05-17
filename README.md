@@ -98,7 +98,6 @@ limits the achievable grid points are:
 | 5   | 200 MHz  | stock                                     |
 | 4   | 250 MHz  | mild bump                                 |
 | 3   | 333 MHz  | this overlay — typical sweet spot         |
-| 2   | 500 MHz  | aggressive — thermal/stability matters    |
 
 To target a different grid point, copy the .dtso, edit the two
 `RP1_PLL_SYS` / `RP1_CLK_SYS` entries to the desired exact `pll_sys_core / N`
