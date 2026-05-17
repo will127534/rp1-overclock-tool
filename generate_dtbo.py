@@ -51,8 +51,13 @@ import sys
 import tempfile
 from pathlib import Path
 
-DT_RP1_CLOCKS_DIR = Path(
+DT_RP1_CLOCKS_DIR_DEFAULT = Path(
     "/sys/firmware/devicetree/base/axi/pcie@1000120000/rp1/clocks@18000"
+)
+# Allow tests / CI to point at a fixture directory containing
+# {assigned-clocks, assigned-clock-rates} binary blobs.
+DT_RP1_CLOCKS_DIR = Path(
+    os.environ.get("RP1_OVERCLOCK_DT_BASE", str(DT_RP1_CLOCKS_DIR_DEFAULT))
 )
 HEADERS_BASE_DEFAULT = Path("/usr/src")
 
@@ -148,8 +153,11 @@ def check_pll_grid(target_hz: int, pll_sys_core_hz: int) -> int:
     """Confirm target_hz lies on pll_sys_core / N. Returns the divider N."""
     if target_hz <= 0:
         die(6, "target rate must be positive")
-    n_real = pll_sys_core_hz / target_hz
-    n = round(n_real)
+    if pll_sys_core_hz <= 0:
+        die(6, f"pll_sys_core rate must be positive, got {pll_sys_core_hz}")
+    # Clamp N to >=1: a target above pll_sys_core would otherwise round to 0
+    # and trip ZeroDivisionError below.
+    n = max(1, round(pll_sys_core_hz / target_hz))
     achieved = pll_sys_core_hz // n
     if abs(achieved - target_hz) > 1:
         # Off-grid: tell the user the nearest achievable rates.

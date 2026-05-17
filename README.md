@@ -113,3 +113,66 @@ but riskier; leave it alone unless you know what you're doing.
 - The overlay only affects RP1 clocks. CPU / GPU clocks are unchanged.
 - After uninstall + reboot, libcamera reverts to the stock 380 Mpix/s
   cap automatically — no library rebuild needed.
+
+## Compatibility
+
+Tested combinations:
+
+| Pi model         | Kernel                      | RP1 stepping (chip_id) | Result |
+|------------------|-----------------------------|------------------------|--------|
+| Pi 5 Model B 8GB | 6.12.75+rpt-rpi-2712        | BCM2712 C0 (0x20001927) | OK     |
+
+Should work on any Pi 5 with a kernel that ships
+`<dt-bindings/clock/rp1.h>` and the `rp1` driver's
+`assigned-clocks` populated. If you confirm a new combination, send a
+PR adding a row.
+
+## Troubleshooting
+
+### `could not find dt-bindings/clock/rp1.h under /usr/src ...`
+
+Install the matching kernel-headers package for the running kernel:
+
+```sh
+sudo apt update
+sudo apt install linux-headers-rpi-2712 device-tree-compiler
+# or, for a cross-install to a specific release:
+sudo apt install "linux-headers-$(uname -r)+rpt-common-rpi"
+```
+
+### `target N Hz isn't on the PLL grid`
+
+The RP1 PLL only produces rates on `pll_sys_core / N` for integer `N >= 1`.
+Pass `--target` an exact grid point — see the table under
+"Want a different target rate?" above. The error message also prints
+the nearest achievable rates.
+
+### Overlay didn't apply after reboot
+
+Check the live clock against the requested target:
+
+```sh
+cat /sys/kernel/debug/clk/clk_sys/clk_rate    # expect 333333333
+```
+
+If it's still 200_000_000:
+
+1. Confirm `dtoverlay=rp1-clk-333mhz` is in `/boot/firmware/config.txt`
+   (uncommented, no typos). Re-run `./install.sh --apply-config` if not.
+2. Confirm the `.dtbo` actually landed: `ls -l /boot/firmware/overlays/
+   rp1-clk-333mhz.dtbo`.
+3. Inspect what was asked for — the install drops a sidecar:
+   `cat /boot/firmware/overlays/rp1-clk-333mhz.generated.dts`. The
+   `[TARGET]` rows must show your target value.
+4. Look for a libcamera log line confirming the new ceiling (see the
+   verification snippet above); it reads the requested rate from the
+   live device tree and applies the PLL-snap math itself.
+
+If the rate looks correct but a sensor still caps at the stock framerate,
+the bottleneck is somewhere else (CSI lane count, sensor MIPI rate, PiSP
+back-end) — that's outside the scope of this tool.
+
+---
+
+Be excellent to each other. (No formal Code of Conduct file — small project,
+common sense applies.)

@@ -62,7 +62,9 @@ run() {
     if [[ $DRY_RUN -eq 1 ]]; then
         echo "  [dry-run] $*"
     else
-        eval "$@"
+        # Callers pass a single pre-quoted command string (so that an empty
+        # $SUDO expands away cleanly); re-parse via the shell.
+        eval "$*"
     fi
 }
 

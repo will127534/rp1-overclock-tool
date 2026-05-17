@@ -1,3 +1,5 @@
 *.dtbo
 *.swp
 *~
+__pycache__/
+*.pyc

@@ -24,7 +24,9 @@ while [[ $# -gt 0 ]]; do
 done
 
 run() {
-    if [[ $DRY_RUN -eq 1 ]]; then echo "  [dry-run] $*"; else eval "$@"; fi
+    # Callers pass a single pre-quoted command string; re-parse via the shell
+    # so an empty $SUDO expands away.
+    if [[ $DRY_RUN -eq 1 ]]; then echo "  [dry-run] $*"; else eval "$*"; fi
 }
 
 if [[ $EUID -ne 0 ]]; then SUDO="sudo"; else SUDO=""; fi

@@ -1,0 +1,26 @@
+name: ci
+
+on:
+  push:
+    branches: [master, main]
+  pull_request:
+
+jobs:
+  static-checks:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: install shellcheck + dtc
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y shellcheck device-tree-compiler
+
+      - name: shellcheck
+        run: shellcheck install.sh uninstall.sh tests/run_tests.sh
+
+      - name: python parse check
+        run: python3 -m py_compile generate_dtbo.py
+
+      - name: fixture-driven smoke test
+        run: ./tests/run_tests.sh
