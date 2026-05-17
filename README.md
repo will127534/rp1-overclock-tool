@@ -14,21 +14,44 @@ the rate in the device tree. The pixel-rate ceiling rises to ~647 Mpix/s,
 unlocking the sensor's native framerate on previously throughput-limited
 modes (e.g. IMX294 full-res 8432×5648 SRGGB12: 7.87 → 10.5 fps).
 
-The overlay is shipped here, separate from libcamera, because the .dtso
-encodes the *index* of `RP1_CLK_SYS` in the `rp1_clocks`
-`assigned-clock-rates` array, and that index is determined by the running
-kernel's `dt-bindings/clock/rp1.h`. If a future kernel renumbers the
-bindings, the old overlay would clock the wrong domain. The tool refuses
-to install if it doesn't have an overlay matching the running kernel
-series.
+The tool is separate from libcamera because the .dtso encodes the *slot
+position* of `RP1_CLK_SYS` in the `rp1_clocks` `assigned-clock-rates`
+array, and that slot is determined by the running kernel's
+`<dt-bindings/clock/rp1.h>` + its rp1 driver's `assigned-clocks` listing.
+If a future kernel renumbers the bindings, a hand-written overlay would
+clock the wrong domain.
+
+To avoid that risk, the default install path **doesn't use a static
+overlay file at all**. It runs `generate_dtbo.py`, which:
+
+1. Parses your kernel's actual `<dt-bindings/clock/rp1.h>` from
+   `/usr/src/linux-headers-<rel>+rpt-common-rpi/include/dt-bindings/clock/rp1.h`
+   to get the canonical RP1 clock IDs.
+2. Reads the live `/sys/firmware/devicetree/base/.../rp1/clocks@18000/`
+   to discover which slot of `assigned-clock-rates` corresponds to each
+   clock ID and the current rate of every slot.
+3. Validates that the requested target rate lies on the PLL grid
+   (`pll_sys_core / N` for integer `N`).
+4. Generates a complete .dts that re-specifies every slot to its
+   current value, modifying only `RP1_PLL_SYS` and `RP1_CLK_SYS`.
+5. Compiles with `dtc`, installs the .dtbo + a sidecar
+   `.generated.dts` into `/boot/firmware/overlays/`.
+
+Prerequisite: the `linux-headers-<rel>+rpt-common-rpi` package. Pi OS
+typically has it; if not, `sudo apt install linux-headers-rpi-2712`.
+If the headers aren't available, fall back to `--bundled` (see below).
 
 ## Install
 
 ```sh
 git clone <this repo>
 cd rp1-overclock-tool
-./install.sh                 # compile + install .dtbo only
-./install.sh --apply-config  # also append dtoverlay= line to config.txt
+./install.sh                              # auto-generate + install
+./install.sh --apply-config               # also append dtoverlay= line
+./install.sh --target 250000000           # different PLL grid point
+./install.sh --bundled                    # use bundled per-series .dtso
+                                          # (when kernel headers missing)
+./install.sh --kernel 6.12.75+rpt-rpi-2712 # cross-install for another release
 sudo reboot
 ```
 
@@ -60,16 +83,23 @@ sudo reboot
 
 ## Adding an overlay for a different kernel series
 
-`install.sh` looks for `overlays/rp1-clk-333mhz-kernel<MAJOR>.<MINOR>.dtso`
-(e.g. `rp1-clk-333mhz-kernel6.12.dtso`). To add a new kernel:
+Default `./install.sh` is fully automatic — it reads whatever kernel
+you're on. So in the common case there's nothing to add: install the
+matching `linux-headers-<rel>+rpt-common-rpi` package and run the tool.
 
-1. Read your kernel's `include/dt-bindings/clock/rp1.h` to find the index
-   of `RP1_PLL_SYS` and `RP1_CLK_SYS` in `assigned-clock-rates`.
-2. Copy the existing kernel6.12 overlay to a new
-   `overlays/rp1-clk-333mhz-kernel<MAJOR>.<MINOR>.dtso`.
-3. Adjust the `assigned-clock-rates` array so those two indices hold
-   `333333333` (and the other entries match your kernel's binding).
-4. Re-run `./install.sh`.
+If you need a bundled fallback (auto-generation can't run — e.g. kernel
+headers aren't installable on the target box), put a hand-written
+`overlays/rp1-clk-333mhz-kernel<MAJOR>.<MINOR>.dtso` matching the kernel
+series and run `./install.sh --bundled`. To compose one:
+
+1. Read your kernel's `<dt-bindings/clock/rp1.h>` for `RP1_PLL_SYS` and
+   `RP1_CLK_SYS` IDs.
+2. Read the running `/sys/firmware/devicetree/base/.../rp1/clocks@18000/
+   assigned-clocks` to find which slot positions those IDs occupy.
+3. Read `.../assigned-clock-rates` to capture the values of every other
+   slot.
+4. Write a .dts that re-specifies the full array, modifying only the two
+   target slots — exactly what `generate_dtbo.py` produces automatically.
 
 ## Want a different target rate?
 
