@@ -21,10 +21,10 @@ array, and that slot is determined by the running kernel's
 If a future kernel renumbers the bindings, a hand-written overlay would
 clock the wrong domain.
 
-To avoid that risk, the default install path **doesn't use a static
-overlay file at all**. It runs `generate_dtbo.py`, which:
+To avoid that risk, `install.sh` doesn't ship a static overlay file at
+all. It runs `generate_dtbo.py`, which:
 
-1. Parses your kernel's actual `<dt-bindings/clock/rp1.h>` from
+1. Parses the running kernel's `<dt-bindings/clock/rp1.h>` from
    `/usr/src/linux-headers-<rel>+rpt-common-rpi/include/dt-bindings/clock/rp1.h`
    to get the canonical RP1 clock IDs.
 2. Reads the live `/sys/firmware/devicetree/base/.../rp1/clocks@18000/`
@@ -37,21 +37,22 @@ overlay file at all**. It runs `generate_dtbo.py`, which:
 5. Compiles with `dtc`, installs the .dtbo + a sidecar
    `.generated.dts` into `/boot/firmware/overlays/`.
 
-Prerequisite: the `linux-headers-<rel>+rpt-common-rpi` package. Pi OS
-typically has it; if not, `sudo apt install linux-headers-rpi-2712`.
-If the headers aren't available, fall back to `--bundled` (see below).
+Prerequisites:
+
+```sh
+sudo apt install linux-headers-rpi-2712 device-tree-compiler
+```
 
 ## Install
 
 ```sh
 git clone <this repo>
 cd rp1-overclock-tool
-./install.sh                              # auto-generate + install
+./install.sh                              # generate + install for this kernel
 ./install.sh --apply-config               # also append dtoverlay= line
 ./install.sh --target 250000000           # different PLL grid point
-./install.sh --bundled                    # use bundled per-series .dtso
-                                          # (when kernel headers missing)
 ./install.sh --kernel 6.12.75+rpt-rpi-2712 # cross-install for another release
+./install.sh --dry-run                    # show the generated .dts and exit
 sudo reboot
 ```
 
@@ -81,25 +82,11 @@ running user can't read `/sys/kernel/debug/`.)
 sudo reboot
 ```
 
-## Adding an overlay for a different kernel series
+## Running on a new kernel series
 
-Default `./install.sh` is fully automatic — it reads whatever kernel
-you're on. So in the common case there's nothing to add: install the
-matching `linux-headers-<rel>+rpt-common-rpi` package and run the tool.
-
-If you need a bundled fallback (auto-generation can't run — e.g. kernel
-headers aren't installable on the target box), put a hand-written
-`overlays/rp1-clk-333mhz-kernel<MAJOR>.<MINOR>.dtso` matching the kernel
-series and run `./install.sh --bundled`. To compose one:
-
-1. Read your kernel's `<dt-bindings/clock/rp1.h>` for `RP1_PLL_SYS` and
-   `RP1_CLK_SYS` IDs.
-2. Read the running `/sys/firmware/devicetree/base/.../rp1/clocks@18000/
-   assigned-clocks` to find which slot positions those IDs occupy.
-3. Read `.../assigned-clock-rates` to capture the values of every other
-   slot.
-4. Write a .dts that re-specifies the full array, modifying only the two
-   target slots — exactly what `generate_dtbo.py` produces automatically.
+Nothing to do — install the matching `linux-headers-<rel>+rpt-common-rpi`
+package and run `./install.sh`. The generator reads whatever rp1.h that
+kernel ships with and matches it against the running device tree.
 
 ## Want a different target rate?
 
